@@ -1,0 +1,1 @@
+One file logger template
