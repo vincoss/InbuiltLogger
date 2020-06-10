@@ -1,6 +1,7 @@
 ﻿using System;
+using System.IO;
+using System.Text;
 using System.Threading;
-
 
 namespace InbuiltLogger.Logging
 {
@@ -12,7 +13,7 @@ namespace InbuiltLogger.Logging
         Error,
         Fatal
     }
-    
+
     public interface InbuiltLogger
     {
         bool IsEnabled(InbuiltLogLevel level);
@@ -20,45 +21,9 @@ namespace InbuiltLogger.Logging
         void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args);
     }
 
-    public class InbuiltConsoleLogger : InbuiltLogger
-    {
-        public bool IsEnabled(InbuiltLogLevel level)
-        {
-            return true;
-        }
-
-        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
-        {
-            string message = format;
-            if (args != null && args.Length > 0)
-            {
-                message = string.Format(format, args);
-            }
-
-            string log = string.Format("{0} [{1}] {2} {3}", DateTime.Now.ToString("hh:mm:ss.ffff tt"), Thread.CurrentThread.ManagedThreadId, level, message);
-
-            Console.WriteLine(log);
-
-            if (exception != null)
-            {
-                Console.WriteLine(exception);
-            }
-        }
-    }
-
     public interface InbuiltLoggerFactory
     {
         InbuiltLogger CreateLogger(Type type);
-    }
-
-    public class InbuiltConsoleLoggerFactory : InbuiltLoggerFactory
-    {
-        private static readonly InbuiltLogger Logger = new InbuiltConsoleLogger();
-
-        public InbuiltLogger CreateLogger(Type type)
-        {
-            return Logger;
-        }
     }
 
     public sealed class InbuiltLog
@@ -71,7 +36,6 @@ namespace InbuiltLogger.Logging
         }
 
         #region For
-
         public static InbuiltLogger For(Type type)
         {
             if (type == null)
@@ -98,16 +62,14 @@ namespace InbuiltLogger.Logging
             }
             _factory = factory;
         }
-
         #endregion
 
-        #region GetLogger
 
+        #region GetLogger
         private static InbuiltLogger GetLogger(Type type)
         {
             return _factory.CreateLogger(type);
         }
-
         #endregion
     }
 
@@ -176,6 +138,61 @@ namespace InbuiltLogger.Logging
         #endregion
     }
 
+    public class InbuiltConsoleLogger : InbuiltLogger
+    {
+        public bool IsEnabled(InbuiltLogLevel level)
+        {
+            return true;
+        }
+
+        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        {
+            string message = format;
+            if (args != null && args.Length > 0)
+            {
+                message = string.Format(format, args);
+            }
+
+            string log = string.Format("{0} [{1}] {2} {3}", DateTime.Now.ToString("hh:mm:ss.ffff tt"), Thread.CurrentThread.ManagedThreadId, level, message);
+
+            Console.WriteLine(log);
+
+            if (exception != null)
+            {
+                Console.WriteLine(exception);
+            }
+        }
+    }
+
+    public class InbuiltConsoleLoggerFactory : InbuiltLoggerFactory
+    {
+        private static readonly InbuiltLogger Logger = new InbuiltConsoleLogger();
+
+        public InbuiltLogger CreateLogger(Type type)
+        {
+            return Logger;
+        }
+    }
+
+    public class InbuiltFileLoggerFactory : InbuiltLoggerFactory
+    {
+        private readonly InbuiltLogger Logger;
+
+        public InbuiltFileLoggerFactory(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentNullException(filePath);
+            }
+            Logger = new InbuiltFileLogger(filePath);
+        }
+
+        public InbuiltLogger CreateLogger(Type type)
+        {
+            return Logger;
+        }
+    }
+
     public class InbuiltNullLogger : InbuiltLogger
     {
         public bool IsEnabled(InbuiltLogLevel level)
@@ -196,6 +213,84 @@ namespace InbuiltLogger.Logging
         public InbuiltLogger CreateLogger(Type type)
         {
             return Logger;
+        }
+    }
+
+    public class InbuiltFileLogger : InbuiltLogger
+    {
+        private readonly string _logPath;
+        private const string DateTimeFormat = "yyyy-MM-dd-HH:mm:ss.fffffff zzz";
+
+        public InbuiltFileLogger(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+            _logPath = path;
+        }
+
+        public bool IsEnabled(InbuiltLogLevel level)
+        {
+            return true;
+        }
+
+        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        {
+            string message = format;
+            if (args != null && args.Length > 0)
+            {
+                message = string.Format(format, args);
+            }
+
+            string log = $"{GetPretext(level)} {message}\r\n";
+
+            Write(log);
+
+            if (exception != null)
+            {
+                Write($"{exception}\r\n");
+            }
+        }
+
+        private static string GetPretext(InbuiltLogLevel level)
+        {
+            string pretext;
+            switch (level)
+            {
+                case InbuiltLogLevel.Information:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [INF] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Debug:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [DBG] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Warning:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [WRN] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Error:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [ERR] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Fatal:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [FTL] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                default:
+                    pretext = "";
+                    break;
+            }
+            return pretext;
+        }
+
+        private void Write(string str)
+        {
+            if (string.IsNullOrWhiteSpace(str))
+            {
+                return;
+            }
+            using (var fs = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+            {
+                byte[] info = Encoding.UTF8.GetBytes(str);
+                fs.Write(info, 0, info.Length);
+            }
         }
     }
 }
