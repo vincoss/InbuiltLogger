@@ -286,11 +286,24 @@ namespace InbuiltLogger.Logging
             {
                 return;
             }
-            using (var fs = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+            using (var fs = CreateStream(_logPath, true, FileShare.Read))
             {
                 byte[] info = Encoding.UTF8.GetBytes(str);
                 fs.Write(info, 0, info.Length);
             }
+        }
+
+        private Stream CreateStream(string filename, bool append, FileShare fileShare)
+        {
+            string directoryFullName = Path.GetDirectoryName(filename);
+
+            if (!Directory.Exists(directoryFullName))
+            {
+                Directory.CreateDirectory(directoryFullName);
+            }
+
+            FileMode fileOpenMode = append ? FileMode.Append : FileMode.Create;
+            return new FileStream(filename, fileOpenMode, FileAccess.Write, fileShare);
         }
     }
 }
