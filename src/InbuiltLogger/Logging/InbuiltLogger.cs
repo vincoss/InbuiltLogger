@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
+
 namespace InbuiltLogger.Logging
 {
     public enum InbuiltLogLevel : byte
@@ -75,6 +76,8 @@ namespace InbuiltLogger.Logging
 
     public static class InbuiltLoggingExtensions
     {
+        private const string DateTimeFormat = "yyyy-MM-dd-HH:mm:ss.fffffff zzz";
+
         public static void Debug(this InbuiltLogger logger, string message)
         {
             LogInternal(logger, InbuiltLogLevel.Debug, null, message, null);
@@ -125,6 +128,33 @@ namespace InbuiltLogger.Logging
             LogInternal(logger, InbuiltLogLevel.Information, null, message, null);
         }
 
+        public static string GetPretext(InbuiltLogLevel level)
+        {
+            string pretext;
+            switch (level)
+            {
+                case InbuiltLogLevel.Information:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [INF] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Debug:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [DBG] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Warning:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [WRN] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Error:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [ERR] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                case InbuiltLogLevel.Fatal:
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [FTL] [{Thread.CurrentThread.ManagedThreadId}]";
+                    break;
+                default:
+                    pretext = "";
+                    break;
+            }
+            return pretext;
+        }
+
         #region Private methods
 
         private static void LogInternal(InbuiltLogger logger, InbuiltLogLevel level, Exception exception, string format, object[] objects)
@@ -153,7 +183,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = string.Format("{0} [{1}] {2} {3}", DateTime.Now.ToString("hh:mm:ss.ffff tt"), Thread.CurrentThread.ManagedThreadId, level, message);
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level)} {message}\r\n";
 
             Console.WriteLine(log);
 
@@ -204,6 +234,11 @@ namespace InbuiltLogger.Logging
         {
             // Hola
         }
+
+        public string GetDeviceInfo()
+        {
+            return null;
+        }
     }
 
     public class InbuiltNullLoggerFactory : InbuiltLoggerFactory
@@ -219,7 +254,6 @@ namespace InbuiltLogger.Logging
     public class InbuiltFileLogger : InbuiltLogger
     {
         private readonly string _logPath;
-        private const string DateTimeFormat = "yyyy-MM-dd-HH:mm:ss.fffffff zzz";
 
         public InbuiltFileLogger(string path)
         {
@@ -243,7 +277,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = $"{GetPretext(level)} {message}\r\n";
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level)} {message}\r\n";
 
             Write(log);
 
@@ -251,33 +285,6 @@ namespace InbuiltLogger.Logging
             {
                 Write($"{exception}\r\n");
             }
-        }
-
-        private static string GetPretext(InbuiltLogLevel level)
-        {
-            string pretext;
-            switch (level)
-            {
-                case InbuiltLogLevel.Information:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [INF] [{Thread.CurrentThread.ManagedThreadId}]";
-                    break;
-                case InbuiltLogLevel.Debug:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [DBG] [{Thread.CurrentThread.ManagedThreadId}]";
-                    break;
-                case InbuiltLogLevel.Warning:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [WRN] [{Thread.CurrentThread.ManagedThreadId}]";
-                    break;
-                case InbuiltLogLevel.Error:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [ERR] [{Thread.CurrentThread.ManagedThreadId}]";
-                    break;
-                case InbuiltLogLevel.Fatal:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [FTL] [{Thread.CurrentThread.ManagedThreadId}]";
-                    break;
-                default:
-                    pretext = "";
-                    break;
-            }
-            return pretext;
         }
 
         private void Write(string str)
