@@ -293,7 +293,7 @@ namespace InbuiltLogger.Logging
             {
                 return;
             }
-            using (var fs = CreateStream(_logPath, true, FileShare.Read))
+            using (var fs = CreateStream(_logPath, true, FileShare.ReadWrite))
             {
                 byte[] info = Encoding.UTF8.GetBytes(str);
                 fs.Write(info, 0, info.Length);
