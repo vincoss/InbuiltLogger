@@ -313,33 +313,48 @@ namespace InbuiltLogger.Logging
             FileMode fileOpenMode = append ? FileMode.Append : FileMode.Create;
             return new FileStream(filename, fileOpenMode, FileAccess.Write, fileShare);
         }
+    }
 
-        public class MultipleInbuiltLogger : InbuiltLogger
+    public class InbuiltMultipleLogger : InbuiltLogger
+    {
+        private readonly InbuiltLogger[] _logs;
+
+        public InbuiltMultipleLogger(params InbuiltLogger[] logs)
         {
-            private readonly InbuiltLogger[] _logs;
+            var otherMultipleLogs = logs.OfType<InbuiltMultipleLogger>().ToArray();
 
-            public MultipleInbuiltLogger(params InbuiltLogger[] logs)
+            this._logs = logs
+                .Except(otherMultipleLogs)
+                .Concat(otherMultipleLogs.SelectMany(l => l._logs))
+                .ToArray();
+        }
+
+        public bool IsEnabled(InbuiltLogLevel level)
+        {
+            return true;
+        }
+
+        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        {
+            foreach (var log in _logs)
             {
-                var otherMultipleLogs = logs.OfType<MultipleInbuiltLogger>().ToArray();
-
-                this._logs = logs
-                    .Except(otherMultipleLogs)
-                    .Concat(otherMultipleLogs.SelectMany(l => l._logs))
-                    .ToArray();
+                log.Log(level, exception, format, args);
             }
+        }
+    }
 
-            public bool IsEnabled(InbuiltLogLevel level)
-            {
-                return true;
-            }
+    public class InbuiltMultipleLoggerFactory : InbuiltLoggerFactory
+    {
+        private readonly InbuiltLogger _logger;
 
-            public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
-            {
-                foreach (var log in _logs)
-                {
-                    log.Log(level, exception, format, args);  
-                }
-            }
+        public InbuiltMultipleLoggerFactory(InbuiltMultipleLogger logger)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public InbuiltLogger CreateLogger(Type type)
+        {
+            return _logger;
         }
     }
 }
