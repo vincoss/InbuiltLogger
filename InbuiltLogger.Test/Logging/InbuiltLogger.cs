@@ -129,8 +129,7 @@ namespace InbuiltLogger.Logging
             LogInternal(logger, InbuiltLogLevel.Information, null, message, null);
         }
 
-        public static string GetPretext(InbuiltLogLevel level,
-            [System.Runtime.CompilerServices.CallerMemberName] string memberName = "")
+        public static string GetPretext(InbuiltLogLevel level, Type loggerType)
         {
             string pretext;
             switch (level)
@@ -139,16 +138,16 @@ namespace InbuiltLogger.Logging
                     pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{Thread.CurrentThread.ManagedThreadId}] [INF]";
                     break;
                 case InbuiltLogLevel.Debug:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [DBG]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}] [DBG]";
                     break;
                 case InbuiltLogLevel.Warning:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [WRN]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}] [WRN]";
                     break;
                 case InbuiltLogLevel.Error:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [ERR]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}] [ERR]";
                     break;
                 case InbuiltLogLevel.Fatal:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}][FTL]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}][FTL]";
                     break;
                 default:
                     pretext = "";
@@ -172,6 +171,13 @@ namespace InbuiltLogger.Logging
 
     public class InbuiltConsoleLogger : InbuiltLogger
     {
+        public readonly Type _type;
+
+        public InbuiltConsoleLogger(Type type)
+        {
+            _type = type ?? throw new ArgumentNullException(nameof(type));    
+        }
+
         public bool IsEnabled(InbuiltLogLevel level)
         {
             return true;
@@ -185,7 +191,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = $"{InbuiltLoggingExtensions.GetPretext(level)} {message}\r\n";
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level, _type)} {message}\r\n";
 
             Console.WriteLine(log);
 
@@ -198,30 +204,26 @@ namespace InbuiltLogger.Logging
 
     public class InbuiltConsoleLoggerFactory : InbuiltLoggerFactory
     {
-        private static readonly InbuiltLogger Logger = new InbuiltConsoleLogger();
-
         public InbuiltLogger CreateLogger(Type type)
         {
-            return Logger;
+            return new InbuiltConsoleLogger(type);
         }
     }
 
     public class InbuiltFileLoggerFactory : InbuiltLoggerFactory
     {
-        private readonly InbuiltLogger Logger;
+        private readonly string _filePath;
 
         public InbuiltFileLoggerFactory(string filePath)
         {
-            if (string.IsNullOrWhiteSpace(filePath))
-            {
-                throw new ArgumentNullException(filePath);
-            }
-            Logger = new InbuiltFileLogger(filePath);
+           if(string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
+
+            _filePath = filePath;
         }
 
         public InbuiltLogger CreateLogger(Type type)
         {
-            return Logger;
+            return new InbuiltFileLogger(_filePath, type);
         }
     }
 
@@ -244,26 +246,25 @@ namespace InbuiltLogger.Logging
     }
 
     public class InbuiltNullLoggerFactory : InbuiltLoggerFactory
-    {
-        private static readonly InbuiltLogger Logger = new InbuiltNullLogger();
-
+    { 
         public InbuiltLogger CreateLogger(Type type)
         {
-            return Logger;
+            return new InbuiltNullLogger();
         }
     }
 
     public class InbuiltFileLogger : InbuiltLogger
     {
         private readonly string _logPath;
+        public readonly Type _type;
 
-        public InbuiltFileLogger(string path)
+        public InbuiltFileLogger(string path, Type type)
         {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                throw new ArgumentNullException(nameof(path));
-            }
+            if (string.IsNullOrWhiteSpace(path)) throw new ArgumentNullException(nameof(path));
+            if (type == null) throw new ArgumentException(nameof(type));
+
             _logPath = path;
+            _type = type;
         }
 
         public bool IsEnabled(InbuiltLogLevel level)
@@ -279,7 +280,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = $"{InbuiltLoggingExtensions.GetPretext(level)} {message}\r\n";
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level, _type)} {message}\r\n";
 
             Write(log);
 
@@ -318,15 +319,15 @@ namespace InbuiltLogger.Logging
 
     public class InbuiltMultipleLogger : InbuiltLogger
     {
-        private readonly InbuiltLogger[] _logs;
+        private readonly InbuiltLogger[] _loggers;
 
         public InbuiltMultipleLogger(params InbuiltLogger[] logs)
         {
             var otherMultipleLogs = logs.OfType<InbuiltMultipleLogger>().ToArray();
 
-            this._logs = logs
+            this._loggers = logs
                 .Except(otherMultipleLogs)
-                .Concat(otherMultipleLogs.SelectMany(l => l._logs))
+                .Concat(otherMultipleLogs.SelectMany(l => l._loggers))
                 .ToArray();
         }
 
@@ -337,11 +338,14 @@ namespace InbuiltLogger.Logging
 
         public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
         {
-            foreach (var log in _logs)
+            foreach (var log in _loggers)
             {
                 log.Log(level, exception, format, args);
             }
         }
+
+        public Type LoggerType { get; set; }
+
     }
 
     public class InbuiltMultipleLoggerFactory : InbuiltLoggerFactory
