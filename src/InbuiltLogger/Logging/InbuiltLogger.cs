@@ -129,25 +129,26 @@ namespace InbuiltLogger.Logging
             LogInternal(logger, InbuiltLogLevel.Information, null, message, null);
         }
 
-        public static string GetPretext(InbuiltLogLevel level)
+        public static string GetPretext(InbuiltLogLevel level,
+            [System.Runtime.CompilerServices.CallerMemberName] string memberName = "")
         {
             string pretext;
             switch (level)
             {
                 case InbuiltLogLevel.Information:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [INF] [{Thread.CurrentThread.ManagedThreadId}]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{Thread.CurrentThread.ManagedThreadId}] [INF]";
                     break;
                 case InbuiltLogLevel.Debug:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [DBG] [{Thread.CurrentThread.ManagedThreadId}]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [DBG]";
                     break;
                 case InbuiltLogLevel.Warning:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [WRN] [{Thread.CurrentThread.ManagedThreadId}]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [WRN]";
                     break;
                 case InbuiltLogLevel.Error:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [ERR] [{Thread.CurrentThread.ManagedThreadId}]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}] [ERR]";
                     break;
                 case InbuiltLogLevel.Fatal:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [FTL] [{Thread.CurrentThread.ManagedThreadId}]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{memberName}] [{Thread.CurrentThread.ManagedThreadId}][FTL]";
                     break;
                 default:
                     pretext = "";
