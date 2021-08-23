@@ -23,6 +23,35 @@ namespace InbuiltLogger.Logging
         void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args);
     }
 
+    class InbuiltLoggerImpl : InbuiltLogger
+    {
+        private readonly InbuiltLoggerSink _sink;
+        private readonly Type _type;
+
+        public InbuiltLoggerImpl(InbuiltLoggerSink sink, Type type)
+        {
+            _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+            _type = type ?? throw new ArgumentNullException(nameof(type));
+        }
+
+        public bool IsEnabled(InbuiltLogLevel level)
+        {
+            return _sink.IsEnabled(level);
+        }
+
+        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        {
+            _sink.Log(_type, level, exception, format, args);
+        }
+    }
+
+    public interface InbuiltLoggerSink
+    {
+        bool IsEnabled(InbuiltLogLevel level);
+
+        void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args);
+    }
+
     public interface InbuiltLoggerFactory
     {
         InbuiltLogger CreateLogger(Type type);
@@ -64,14 +93,16 @@ namespace InbuiltLogger.Logging
             }
             _factory = factory;
         }
+      
         #endregion
 
-
         #region GetLogger
+
         private static InbuiltLogger GetLogger(Type type)
         {
             return _factory.CreateLogger(type);
         }
+        
         #endregion
     }
 
@@ -169,21 +200,14 @@ namespace InbuiltLogger.Logging
         #endregion
     }
 
-    public class InbuiltConsoleLogger : InbuiltLogger
+    public class InbuiltConsoleLogger : InbuiltLoggerSink
     {
-        public readonly Type _type;
-
-        public InbuiltConsoleLogger(Type type)
-        {
-            _type = type ?? throw new ArgumentNullException(nameof(type));    
-        }
-
         public bool IsEnabled(InbuiltLogLevel level)
         {
             return true;
         }
 
-        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        public void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args)
         {
             string message = format;
             if (args != null && args.Length > 0)
@@ -191,7 +215,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = $"{InbuiltLoggingExtensions.GetPretext(level, _type)} {message}\r\n";
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level, type)} {message}\r\n";
 
             Console.WriteLine(log);
 
@@ -204,67 +228,63 @@ namespace InbuiltLogger.Logging
 
     public class InbuiltConsoleLoggerFactory : InbuiltLoggerFactory
     {
+        private readonly InbuiltLoggerSink _sink = new InbuiltConsoleLogger();
+
         public InbuiltLogger CreateLogger(Type type)
         {
-            return new InbuiltConsoleLogger(type);
+            return new InbuiltLoggerImpl(_sink, type);
         }
     }
 
     public class InbuiltFileLoggerFactory : InbuiltLoggerFactory
     {
-        private readonly string _filePath;
+        private readonly InbuiltLoggerSink _sink;
 
         public InbuiltFileLoggerFactory(string filePath)
         {
-           if(string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
+            if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentNullException(nameof(filePath));
 
-            _filePath = filePath;
+            _sink = new InbuiltFileLogger(filePath);
         }
 
         public InbuiltLogger CreateLogger(Type type)
         {
-            return new InbuiltFileLogger(_filePath, type);
+            return new InbuiltLoggerImpl(_sink, type);
         }
     }
 
-    public class InbuiltNullLogger : InbuiltLogger
+    public class InbuiltNullLogger : InbuiltLoggerSink
     {
         public bool IsEnabled(InbuiltLogLevel level)
         {
             return false;
         }
 
-        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        public void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args)
         {
             // Hola
-        }
-
-        public string GetDeviceInfo()
-        {
-            return null;
         }
     }
 
     public class InbuiltNullLoggerFactory : InbuiltLoggerFactory
-    { 
+    {
+        private readonly InbuiltLoggerSink _sink = new InbuiltNullLogger();
+
         public InbuiltLogger CreateLogger(Type type)
         {
-            return new InbuiltNullLogger();
+            return new InbuiltLoggerImpl(_sink, type);
         }
     }
 
-    public class InbuiltFileLogger : InbuiltLogger
+    public class InbuiltFileLogger : InbuiltLoggerSink
     {
         private readonly string _logPath;
-        public readonly Type _type;
 
-        public InbuiltFileLogger(string path, Type type)
+        public InbuiltFileLogger(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentNullException(nameof(path));
-            if (type == null) throw new ArgumentException(nameof(type));
 
             _logPath = path;
-            _type = type;
         }
 
         public bool IsEnabled(InbuiltLogLevel level)
@@ -272,7 +292,7 @@ namespace InbuiltLogger.Logging
             return true;
         }
 
-        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        public void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args)
         {
             string message = format;
             if (args != null && args.Length > 0)
@@ -280,7 +300,7 @@ namespace InbuiltLogger.Logging
                 message = string.Format(format, args);
             }
 
-            string log = $"{InbuiltLoggingExtensions.GetPretext(level, _type)} {message}\r\n";
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level, type)} {message}\r\n";
 
             Write(log);
 
@@ -317,17 +337,17 @@ namespace InbuiltLogger.Logging
         }
     }
 
-    public class InbuiltMultipleLogger : InbuiltLogger
+    public class InbuiltMultipleLoggerSink : InbuiltLoggerSink
     {
-        private readonly InbuiltLogger[] _loggers;
+        private readonly InbuiltLoggerSink[] _sinks;
 
-        public InbuiltMultipleLogger(params InbuiltLogger[] logs)
+        public InbuiltMultipleLoggerSink(params InbuiltLoggerSink[] sinks)
         {
-            var otherMultipleLogs = logs.OfType<InbuiltMultipleLogger>().ToArray();
+            var otherMultipleLogs = sinks.OfType<InbuiltMultipleLoggerSink>().ToArray();
 
-            this._loggers = logs
+            this._sinks = sinks
                 .Except(otherMultipleLogs)
-                .Concat(otherMultipleLogs.SelectMany(l => l._loggers))
+                .Concat(otherMultipleLogs.SelectMany(l => l._sinks))
                 .ToArray();
         }
 
@@ -336,30 +356,27 @@ namespace InbuiltLogger.Logging
             return true;
         }
 
-        public void Log(InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        public void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args)
         {
-            foreach (var log in _loggers)
+            foreach (var log in _sinks)
             {
-                log.Log(level, exception, format, args);
+                log.Log(type, level, exception, format, args);
             }
         }
-
-        public Type LoggerType { get; set; }
-
     }
 
     public class InbuiltMultipleLoggerFactory : InbuiltLoggerFactory
     {
-        private readonly InbuiltLogger _logger;
+        private readonly InbuiltLoggerSink _sink;
 
-        public InbuiltMultipleLoggerFactory(InbuiltMultipleLogger logger)
+        public InbuiltMultipleLoggerFactory(InbuiltMultipleLoggerSink sink)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         }
 
         public InbuiltLogger CreateLogger(Type type)
         {
-            return _logger;
+            return new InbuiltLoggerImpl(_sink, type);
         }
     }
 }
