@@ -166,7 +166,7 @@ namespace InbuiltLogger.Logging
             switch (level)
             {
                 case InbuiltLogLevel.Information:
-                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{Thread.CurrentThread.ManagedThreadId}] [INF]";
+                    pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}] [INF]";
                     break;
                 case InbuiltLogLevel.Debug:
                     pretext = $"{DateTimeOffset.Now.ToString(DateTimeFormat)} [{loggerType}] [{Thread.CurrentThread.ManagedThreadId}] [DBG]";
