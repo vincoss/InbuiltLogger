@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 
@@ -377,6 +379,85 @@ namespace InbuiltLogger.Logging
         public InbuiltLogger CreateLogger(Type type)
         {
             return new InbuiltLoggerImpl(_sink, type);
+        }
+    }
+    public interface IInbuiltLoggerTokenProvider
+    {
+        string Token { get; }
+    }
+
+    public class InbuiltHttpLogger : InbuiltLoggerSink
+    {
+        private readonly string _url;
+        private readonly IInbuiltLoggerTokenProvider _tokenProvider;
+
+        public InbuiltHttpLogger(string url, IInbuiltLoggerTokenProvider provider)
+        {
+            _url = url ?? throw new ArgumentNullException(nameof(url));
+            _tokenProvider = provider ?? throw new ArgumentNullException(nameof(provider));
+        }
+
+        public bool IsEnabled(InbuiltLogLevel level)
+        {
+            return true;
+        }
+
+        public void Log(Type type, InbuiltLogLevel level, Exception exception, string format, params object[] args)
+        {
+            string message = format;
+            if (args != null && args.Length > 0)
+            {
+                message = string.Format(format, args);
+            }
+
+            string log = $"{InbuiltLoggingExtensions.GetPretext(level, type)} {message}\r\n";
+
+            Write(log);
+
+            if (exception != null)
+            {
+                Write($"{exception}\r\n");
+            }
+        }
+
+        private void Write(string str)
+        {
+            if (string.IsNullOrWhiteSpace(str))
+            {
+                return;
+            }
+
+            HttpClient httpClient = CreateHttpClient(_tokenProvider.Token);
+
+            var content = new StringContent(str);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            var message = new HttpRequestMessage(HttpMethod.Post, _url)
+            {
+                Content = content
+            };
+
+            using (var response = httpClient.Send(message))
+            {
+                if (response.IsSuccessStatusCode == false)
+                {
+                    throw new HttpRequestException("Error", null, response.StatusCode);
+                }
+            }
+        }
+
+        private HttpClient CreateHttpClient(string token = "")
+        {
+            var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromMinutes(2);
+            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            if (string.IsNullOrWhiteSpace(token) == false)
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            return httpClient;
         }
     }
 }
